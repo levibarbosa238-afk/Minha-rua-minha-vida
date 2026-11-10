@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minha rua, minha vida</title>
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--green:#176b52;--green2:#218568;--cream:#f5f7f3;--ink:#20312b;--muted:#68766f;--line:#dfe7e1}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--cream);color:var(--ink)}
+header{background:linear-gradient(120deg,#12533f,#218568);color:white;padding:25px max(20px,calc((100% - 1120px)/2));}
+.brand{font-size:clamp(25px,4vw,36px);font-weight:800;margin:0}.tagline{margin:8px 0 0;color:#e1f3e9}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px}
+nav button{border:1px solid #ffffff70;background:#ffffff18;color:white;padding:10px 15px;border-radius:9px;font-weight:700;cursor:pointer}
+nav button.active,nav button:hover{background:white;color:var(--green)}
+main{max-width:1120px;margin:25px auto;padding:0 18px 40px}
+.panel{display:none}.panel.active{display:block}
+h2{margin:0 0 8px;font-size:25px}.intro{color:var(--muted);line-height:1.5;margin:0 0 18px}
+.card{background:white;border:1px solid var(--line);border-radius:15px;padding:19px;margin-bottom:18px;box-shadow:0 3px 14px #183c2910}
+.searchrow{display:flex;gap:9px;flex-wrap:wrap}
+input,textarea{font:inherit;border:1px solid #cbd8cf;border-radius:9px;padding:12px;background:white;color:var(--ink);width:100%}
+.searchrow input{flex:1;min-width:200px}
+button.primary{background:var(--green);color:white;border:0;border-radius:9px;padding:12px 17px;font-weight:700;cursor:pointer}
+button.primary:hover{background:var(--green2)}
+#map{height:480px;border-radius:12px;border:1px solid var(--line);z-index:1}
+.map-note{font-size:13px;color:var(--muted);margin:10px 0 0}
+.results{margin-top:12px;display:grid;gap:8px}
+.result{padding:11px 13px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:#fbfdfb}
+.result:hover{border-color:var(--green);background:#f1faf5}
+.street-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:15px}
+.street{border:1px solid var(--line);border-radius:10px;padding:13px;background:#fbfdfb;cursor:pointer;text-align:left;color:var(--ink)}
+.street:hover{border-color:var(--green)}
+label{display:block;font-weight:700;margin:13px 0 7px}
+.stars{display:flex;gap:5px;margin:6px 0 12px}.stars button{border:0;background:none;font-size:31px;color:#cbd3cd;cursor:pointer;padding:0 2px}.stars button.on{color:#f2b632}
+.comment{border-top:1px solid var(--line);padding:14px 0}.comment:first-child{border-top:0}
+.comment-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.comment-rating{color:#d99b16;letter-spacing:2px}
+.comment img{max-width:min(100%,360px);max-height:240px;object-fit:cover;border-radius:9px;margin-top:10px;display:block}
+.small{font-size:13px;color:var(--muted)}.empty{color:var(--muted);padding:14px 0}
+footer{text-align:center;color:var(--muted);padding:22px;font-size:13px}
+@media(max-width:600px){#map{height:390px}.card{padding:15px}nav button{flex:1}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Minha rua, minha vida</h1>
+  <p class="tagline">Sua rua tem voz. Encontre, avalie e compartilhe o que precisa melhorar em Codó.</p>
+  <nav aria-label="Navegação principal">
+    <button class="active" data-tab="mapa">Mapa de Codó</button>
+    <button data-tab="ruas">Pesquisar ruas</button>
+    <button data-tab="comentarios">Comentários e avaliações</button>
+  </nav>
+</header>
+<main>
+<section id="mapa" class="panel active">
+  <div class="card">
+    <h2>Encontre sua rua no mapa</h2>
+    <p class="intro">Pesquise pelo nome da rua ou de um lugar. Você também pode aproximar o mapa e tocar em um ponto para marcar a região.</p>
+    <label class="location-optin" style="display:flex;align-items:center;gap:9px;font-weight:normal;margin-top:14px">
+      <input id="allowLocation" type="checkbox" style="width:auto;transform:scale(1.15)">
+      Permitir que o site utilize minha localização neste dispositivo
+    </label>
+    <div class="searchrow" style="margin-top:10px">
+      <button class="primary" id="locateBtn" type="button" disabled>Mostrar minha localização</button>
+    </div>
+    <p class="small" id="locationStatus" aria-live="polite">Marque a opção acima para habilitar o recurso. O navegador também solicitará sua autorização.</p>
+  </div>
+  <div class="card">
+    <div id="map" role="application" aria-label="Mapa interativo de Codó"></div>
+    <p class="map-note">Mapa colaborativo baseado no OpenStreetMap. A disponibilidade e os nomes das vias dependem dos dados cartográficos existentes.</p>
+  </div>
+</section>
+
+<section id="ruas" class="panel">
+  <div class="card">
+    <h2>Lista de ruas de Codó</h2>
+    <p class="intro">Digite o nome completo ou apenas uma parte do nome. A busca consulta os nomes de vias encontrados no mapa aberto; a lista pode não incluir todas as ruas da cidade.</p>
+    <div class="searchrow">
+      <input id="streetSearch" placeholder="Digite o nome da sua rua..." aria-label="Nome da rua">
+      <button class="primary" id="streetSearchBtn">Buscar ruas</button>
+    </div>
+    <div id="streetResults" class="street-grid"></div>
+    <p class="small" id="streetStatus">Faça uma pesquisa para ver os resultados.</p>
+    <button class="primary" id="retryStreetBtn" type="button" style="display:none;margin-top:10px">Tentar carregar novamente</button>
+  </div>
+</section>
+
+<section id="comentarios" class="panel">
+  <div class="card">
+    <h2>Comentários e avaliação da sua rua</h2>
+    <p class="intro">Conte como está a rua, avalie de 1 a 5 estrelas e, se quiser, anexe uma imagem para mostrar o problema ou uma melhoria.</p>
+    <form id="commentForm">
+      <label for="streetName">Nome da rua ou local</label>
+      <input id="streetName" required placeholder="Ex.: Rua São Luís">
+      <label>Sua avaliação</label>
+      <div class="stars" id="ratingPicker" aria-label="Escolha uma avaliação de até cinco estrelas">
+        <button type="button" data-rating="1" aria-label="1 estrela">★</button>
+        <button type="button" data-rating="2" aria-label="2 estrelas">★</button>
+        <button type="button" data-rating="3" aria-label="3 estrelas">★</button>
+        <button type="button" data-rating="4" aria-label="4 estrelas">★</button>
+        <button type="button" data-rating="5" aria-label="5 estrelas">★</button>
+      </div>
+      <label for="commentText">Comentário</label>
+      <textarea id="commentText" rows="4" required placeholder="O que está bom ou precisa melhorar nessa rua?"></textarea>
+      <label for="photo">Adicionar imagem (opcional)</label>
+      <input id="photo" type="file" accept="image/*">
+      <p class="small">Protótipo: as avaliações e imagens ficam salvas somente neste navegador. Não publique fotos com rostos, placas ou dados pessoais sem autorização.</p>
+      <button class="primary" type="submit">Publicar comentário</button>
+      <p id="formStatus" class="small" aria-live="polite"></p>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Relatos da comunidade</h2>
+    <p class="intro">Filtre os relatos pelo nome da rua para encontrar mais facilmente os comentários de um local específico.</p>
+    <label for="commentFilter">Filtrar comentários por rua</label>
+    <div class="searchrow">
+      <input id="commentFilter" placeholder="Digite o nome da rua..." aria-label="Filtrar comentários por nome da rua">
+      <button class="primary" id="clearCommentFilter" type="button">Limpar filtro</button>
+    </div>
+    <p id="filterStatus" class="small" aria-live="polite"></p>
+    <div id="commentsList"></div>
+  </div>
+</section>
+</main>
+<footer>Minha rua, minha vida • Projeto comunitário para valorizar e melhorar as ruas de Codó, MA.</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const tabs=document.querySelectorAll('nav button');
+tabs.forEach(b=>b.addEventListener('click',()=>{
+  tabs.forEach(x=>x.classList.remove('active'));b.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById(b.dataset.tab).classList.add('active');
+  if(b.dataset.tab==='mapa') setTimeout(()=>map.invalidateSize(),100);
+  if(b.dataset.tab==='ruas') loadAllStreets();
+}));
+const map=L.map('map').setView([-4.4553,-43.8859],14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19,attribution:'&copy; OpenStreetMap'
+}).addTo(map);
+let selectedMarker=null;
+let userMarker=null;
+let userAccuracy=null;
+
+const allowLocation=document.getElementById('allowLocation');
+const locateBtn=document.getElementById('locateBtn');
+function requestUserLocation(){
+  const status=document.getElementById('locationStatus');
+  if(!('geolocation' in navigator)){
+    status.textContent='Este navegador não oferece suporte à localização.';
+    return;
+  }
+  status.textContent='Solicitando acesso à sua localização... Autorize quando o navegador perguntar.';
+  navigator.geolocation.getCurrentPosition(async position=>{
+    const lat=position.coords.latitude;
+    const lon=position.coords.longitude;
+    const accuracy=position.coords.accuracy;
+    if(userMarker) map.removeLayer(userMarker);
+    if(userAccuracy) map.removeLayer(userAccuracy);
+    userMarker=L.marker([lat,lon]).addTo(map)
+      .bindPopup('Você está aproximadamente aqui.').openPopup();
+    userAccuracy=L.circle([lat,lon],{
+      radius:accuracy,
+      color:'#176b52',
+      fillColor:'#218568',
+      fillOpacity:0.12,
+      weight:2
+    }).addTo(map);
+    map.setView([lat,lon],17);
+    status.textContent='Sua localização foi marcada. Identificando o nome da rua...';
+    try{
+      const place=await reverseGeocode(lat,lon);
+      const a=place.address||{};
+      const street=a.road||a.pedestrian||a.residential||a.path||a.neighbourhood||a.suburb||place.name||'';
+      if(street){
+        await selectStreetForComment(street);
+        status.textContent='Rua identificada: '+street+'. Você foi direcionado para a aba de comentários.';
+      }else{
+        status.textContent='Sua localização foi marcada, mas não foi possível identificar o nome da rua neste ponto.';
+      }
+    }catch(error){
+      status.textContent='Sua localização foi marcada, mas não foi possível identificar o nome da rua. Tente novamente em outro ponto.';
+    }
+  },error=>{
+    const messages={
+      1:'Permissão de localização negada. Autorize o acesso à localização nas configurações do navegador.',
+      2:'Não foi possível determinar sua localização. Verifique o GPS ou tente novamente.',
+      3:'A localização demorou demais. Tente novamente.'
+    };
+    status.textContent=messages[error.code]||'Não foi possível obter sua localização.';
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:30000});
+}
+allowLocation.addEventListener('change',()=>{
+  locateBtn.disabled=!allowLocation.checked;
+  if(!allowLocation.checked){
+    if(userMarker){map.removeLayer(userMarker);userMarker=null;}
+    if(userAccuracy){map.removeLayer(userAccuracy);userAccuracy=null;}
+    document.getElementById('locationStatus').textContent='Acesso à localização desativado. Sua posição foi removida do mapa.';
+  }else{
+    requestUserLocation();
+  }
+});
+locateBtn.addEventListener('click',()=>{
+  if(!allowLocation.checked){
+    document.getElementById('locationStatus').textContent='Primeiro marque a opção para permitir o uso da localização.';
+    return;
+  }
+  requestUserLocation();
+});
+
+async function selectStreetForComment(name){
+  const street=(name||'').trim();
+  if(street){
+    document.getElementById('streetName').value=street;
+    document.querySelector('[data-tab="comentarios"]').click();
+  }
+}
+async function reverseGeocode(lat,lon){
+  const url='https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat='+encodeURIComponent(lat)+'&lon='+encodeURIComponent(lon);
+  const r=await fetch(url);
+  if(!r.ok)throw new Error('Não foi possível identificar a rua');
+  return await r.json();
+}
+map.on('click',async e=>{
+  if(selectedMarker)map.removeLayer(selectedMarker);
+  selectedMarker=L.marker(e.latlng).addTo(map).bindPopup('Local selecionado. Identificando a rua...').openPopup();
+  try{
+    const place=await reverseGeocode(e.latlng.lat,e.latlng.lng);
+    const a=place.address||{};
+    const street=a.road||a.pedestrian||a.residential||a.path||a.neighbourhood||a.suburb||place.name||'';
+    if(street){
+      selectedMarker.bindPopup(street).openPopup();
+      await selectStreetForComment(street);
+    }else{
+      selectedMarker.bindPopup('Não foi possível identificar o nome da rua neste ponto.').openPopup();
+    }
+  }catch(error){
+    selectedMarker.bindPopup('Não foi possível identificar a rua. Tente selecionar outro ponto.').openPopup();
+  }
+});
+let codoStreets=[];
+let streetsLoaded=false;
+let streetsLoading=false;
+const STREET_CACHE_KEY='minhaRuaMinhaVida_codoStreets_v1';
+const STREET_CACHE_MAX_AGE=7*24*60*60*1000;
+function normalizeStreetName(value){
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();
+}
+function renderStreetResults(){
+  const q=document.getElementById('streetSearch').value.trim();
+  const box=document.getElementById('streetResults');
+  const status=document.getElementById('streetStatus');
+  box.innerHTML='';
+  let results=codoStreets;
+  if(q){
+    const terms=normalizeStreetName(q).split(/\s+/).filter(Boolean);
+    results=codoStreets.filter(name=>{
+      const normalizedName=normalizeStreetName(name);
+      return terms.every(term=>normalizedName.includes(term));
+    });
+  }
+  if(!results.length){
+    status.textContent=q?'Nenhuma rua encontrada com esse nome.':'Nenhuma rua encontrada nos dados do mapa.';
+    return;
+  }
+  results.forEach(name=>{
+    const b=document.createElement('button');
+    b.className='street';
+    b.innerHTML='<strong></strong><div class="small">Selecionar esta rua</div>';
+    b.querySelector('strong').textContent=name;
+    b.onclick=()=>selectStreetForComment(name);
+    box.appendChild(b);
+  });
+  status.textContent=results.length+' resultado(s) encontrado(s)'+(q?' para a pesquisa.':' em Codó.');
+}
+function readStreetCache(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(STREET_CACHE_KEY)||'null');
+    if(!saved||!Array.isArray(saved.names)||!saved.names.length)return null;
+    return saved;
+  }catch(error){return null;}
+}
+function saveStreetCache(names){
+  try{localStorage.setItem(STREET_CACHE_KEY,JSON.stringify({names,updatedAt:Date.now()}));}catch(error){}
+}
+async function loadAllStreets(){
+  const status=document.getElementById('streetStatus');
+  const retry=document.getElementById('retryStreetBtn');
+  if(streetsLoading)return;
+  if(retry)retry.style.display='none';
+  const cached=readStreetCache();
+  if(!streetsLoaded&&cached){
+    codoStreets=cached.names;
+    streetsLoaded=true;
+    renderStreetResults();
+    const age=Date.now()-(cached.updatedAt||0);
+    if(age<STREET_CACHE_MAX_AGE)return;
+    status.textContent='Mostrando ruas salvas enquanto verificamos se há atualizações...';
+  }else if(streetsLoaded){
+    renderStreetResults();
+    return;
+  }else{
+    status.textContent='Carregando a lista de ruas de Codó...';
+  }
+
+  streetsLoading=true;
+  const query='[out:json][timeout:25];area["name"="Codó"]["boundary"="administrative"]->.codo;(way(area.codo)["highway"]["name"];);out tags;';
+  const servers=[
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter'
+  ];
+  let lastError=null;
+  try{
+    // No Netlify, esta função entrega uma lista compartilhada e armazenada no CDN.
+    // Assim, depois da primeira consulta, os demais visitantes não precisam consultar o Overpass.
+    try{
+      const response=await fetch('/.netlify/functions/ruas',{method:'GET',headers:{'Accept':'application/json'}});
+      if(response.ok){
+        const payload=await response.json();
+        const names=Array.isArray(payload.names)?payload.names:[];
+        if(names.length){
+          codoStreets=[...new Set(names)].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+          streetsLoaded=true;
+          saveStreetCache(codoStreets);
+          renderStreetResults();
+          return;
+        }
+      }
+      lastError=new Error('A função de ruas da hospedagem não respondeu com uma lista válida.');
+    }catch(error){lastError=error;}
+
+    // Compatibilidade para abrir o HTML fora do Netlify: consulta direta com tempo limitado.
+    for(const server of servers){
+      try{
+        const controller=new AbortController();
+        const timeout=setTimeout(()=>controller.abort(),8000);
+        let response;
+        try{
+          response=await fetch(server,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:'data='+encodeURIComponent(query),signal:controller.signal});
+        }finally{clearTimeout(timeout);}
+        if(!response.ok)throw new Error('Servidor respondeu com erro '+response.status);
+        const data=await response.json();
+        const names=[...new Set((data.elements||[]).map(item=>item.tags&&item.tags.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+        if(!names.length)throw new Error('Nenhuma rua encontrada nos dados recebidos.');
+        codoStreets=names;
+        streetsLoaded=true;
+        saveStreetCache(names);
+        renderStreetResults();
+        return;
+      }catch(error){lastError=error;}
+    }
+    throw lastError||new Error('Serviços de mapas indisponíveis.');
+  }catch(error){
+    if(!cached){
+      status.textContent='Não foi possível carregar a lista agora. Verifique a internet e tente novamente. Se o site estiver no Netlify, publique também a pasta netlify/functions.';
+    }else{
+      status.textContent='Mostrando a lista salva. Não foi possível atualizá-la agora.';
+    }
+    if(retry)retry.style.display='inline-block';
+  }finally{
+    streetsLoading=false;
+  }
+}
+function doStreetSearch(){
+  if(!streetsLoaded){loadAllStreets().then(()=>{if(streetsLoaded)renderStreetResults();});return;}
+  renderStreetResults();
+}
+document.getElementById('streetSearch').addEventListener('input',()=>{
+  if(streetsLoaded)renderStreetResults();
+});
+document.getElementById('streetSearchBtn').onclick=doStreetSearch;
+document.getElementById('retryStreetBtn').addEventListener('click',()=>loadAllStreets());
+// Aquece a lista em segundo plano para que a aba já esteja pronta quando for aberta.
+window.addEventListener('load',()=>setTimeout(()=>loadAllStreets(),1800));
+document.getElementById('streetSearch').addEventListener('keydown',e=>{if(e.key==='Enter')doStreetSearch();});
+
+let rating=0;
+const ratingButtons=[...document.querySelectorAll('#ratingPicker button')];
+function setRating(n){rating=n;ratingButtons.forEach(b=>b.classList.toggle('on',Number(b.dataset.rating)<=n));}
+ratingButtons.forEach(b=>b.addEventListener('click',()=>setRating(Number(b.dataset.rating))));
+const STORAGE='minhaRuaMinhaVida_comments_v1';
+function loadComments(){try{return JSON.parse(localStorage.getItem(STORAGE)||'[]')}catch(e){return[]}}
+function renderComments(){
+ const box=document.getElementById('commentsList'),allItems=loadComments();box.innerHTML='';
+ const term=(document.getElementById('commentFilter')?.value||'').trim().toLocaleLowerCase('pt-BR');
+ const items=allItems.filter(c=>c.street.toLocaleLowerCase('pt-BR').includes(term));
+ const status=document.getElementById('filterStatus');
+ if(status) status.textContent=term ? `${items.length} de ${allItems.length} comentário(s) encontrado(s).` : `${allItems.length} comentário(s) publicado(s).`;
+ if(!allItems.length){box.innerHTML='<p class="empty">Ainda não há comentários. Seja a primeira pessoa a avaliar uma rua!</p>';return;}
+ if(!items.length){box.innerHTML='<p class="empty">Nenhum comentário encontrado para essa rua. Confira a escrita ou tente outro nome.</p>';return;}
+ items.forEach(c=>{
+  const el=document.createElement('article');el.className='comment';
+  const head=document.createElement('div');head.className='comment-head';
+  const title=document.createElement('strong');title.textContent=c.street;
+  const stars=document.createElement('span');stars.className='comment-rating';stars.textContent='★'.repeat(c.rating)+'☆'.repeat(5-c.rating);
+  head.append(title,stars);el.append(head);
+  const p=document.createElement('p');p.textContent=c.text;el.append(p);
+  const date=document.createElement('div');date.className='small';date.textContent=c.date;el.append(date);
+  if(c.photo){const img=document.createElement('img');img.src=c.photo;img.alt='Imagem enviada junto ao comentário';el.append(img);}
+  box.append(el);
+ });
+}
+document.getElementById('commentFilter').addEventListener('input',renderComments);
+document.getElementById('clearCommentFilter').addEventListener('click',()=>{
+ document.getElementById('commentFilter').value='';
+ renderComments();
+});
+document.getElementById('commentForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const status=document.getElementById('formStatus'),file=document.getElementById('photo').files[0];
+ if(!rating){status.textContent='Escolha uma quantidade de estrelas.';return;}
+ if(file&&file.size>2*1024*1024){status.textContent='A imagem deve ter no máximo 2 MB.';return;}
+ let photo='';
+ if(file){photo=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});}
+ const items=loadComments();
+ items.unshift({street:document.getElementById('streetName').value.trim(),rating,text:document.getElementById('commentText').value.trim(),photo,date:new Date().toLocaleString('pt-BR')});
+ try{localStorage.setItem(STORAGE,JSON.stringify(items));}
+ catch(err){status.textContent='O armazenamento do navegador está cheio. Tente publicar sem imagem.';return;}
+ e.target.reset();setRating(0);status.textContent='Comentário publicado neste navegador!';renderComments();
+});
+renderComments();
+</script>
+</body>
+</html>
